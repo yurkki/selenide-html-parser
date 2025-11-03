@@ -13,7 +13,7 @@ COPY src ./src
 RUN gradle build -x test --no-daemon
 
 # Финальный образ с поддержкой Chrome для Selenide
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Устанавливаем Chromium и зависимости
