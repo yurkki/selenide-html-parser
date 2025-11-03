@@ -19,10 +19,12 @@ public class HtmlParserService {
         Configuration.timeout = 10000;
         Configuration.browserSize = "1920x1080";
         
-        // Настройка для работы в Docker/Railway (если Chromium установлен)
+        // Настройка для работы в Docker/Railway
         String chromeBin = System.getenv("CHROME_BIN");
         if (chromeBin != null && !chromeBin.isEmpty()) {
             System.setProperty("webdriver.chrome.binary", chromeBin);
+            // Дополнительные опции для headless Chrome в Docker (через систему свойств)
+            System.setProperty("chromeoptions.args", "--no-sandbox;--disable-dev-shm-usage;--disable-gpu;--disable-software-rasterizer");
         }
         
         try {
