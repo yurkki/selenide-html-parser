@@ -20,7 +20,7 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y \
     wget \
-    gnupg2 \
+    gnupg \
     ca-certificates \
     fonts-liberation \
     libasound2t64 \
@@ -41,8 +41,8 @@ RUN apt-get update && \
     libxkbcommon0t64 \
     libxrandr2t64 \
     xdg-utils \
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
