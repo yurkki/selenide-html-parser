@@ -3,14 +3,20 @@ package tech.kirouski.parser.service;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import tech.kirouski.parser.dto.ContactInfo;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class HtmlParserService {
@@ -231,5 +237,221 @@ public class HtmlParserService {
         } catch (Exception e) {
             logger.warn("Не удалось удалить признаки автоматизации", e);
         }
+    }
+    
+    /**
+     * Извлекает контактную информацию из HTML
+     */
+    public ContactInfo extractContactInfo(String html, String url) {
+        ContactInfo contactInfo = new ContactInfo();
+        contactInfo.setFullHtml(html);
+        
+        try {
+            Document doc = Jsoup.parse(html);
+            
+            // Извлекаем телефоны
+            contactInfo.setPhones(extractPhones(html, doc));
+            
+            // Извлекаем email
+            contactInfo.setEmails(extractEmails(html, doc));
+            
+            // Извлекаем адреса
+            contactInfo.setAddresses(extractAddresses(doc));
+            
+            // Извлекаем время работы
+            contactInfo.setWorkingHours(extractWorkingHours(doc));
+            
+            logger.info("Извлечена контактная информация: телефоны={}, emails={}, адреса={}, время работы={}",
+                    contactInfo.getPhones().size(),
+                    contactInfo.getEmails().size(),
+                    contactInfo.getAddresses().size(),
+                    contactInfo.getWorkingHours() != null ? "найдено" : "не найдено");
+            
+        } catch (Exception e) {
+            logger.error("Ошибка при извлечении контактной информации", e);
+        }
+        
+        return contactInfo;
+    }
+    
+    /**
+     * Извлекает телефоны из HTML
+     */
+    private List<String> extractPhones(String html, Document doc) {
+        Set<String> phones = new LinkedHashSet<>();
+        
+        // Регулярное выражение для телефонов (разные форматы)
+        Pattern phonePattern = Pattern.compile(
+            "(?:\\+?375|8)?\\s?[-()]?\\s?(?:29|25|33|44|17)\\s?[-()]?\\s?\\d{3}[-()]?\\s?\\d{2}[-()]?\\s?\\d{2}" + // Беларусь
+            "|(?:\\+?7|8)?\\s?[-()]?\\s?(?:\\d{3})\\s?[-()]?\\s?\\d{3}[-()]?\\s?\\d{2}[-()]?\\s?\\d{2}" + // Россия
+            "|(?:\\+?\\d{1,3})?[-.\\s]?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}" + // Международный формат
+            "|\\d{3}[-.\\s]?\\d{3}[-.\\s]?\\d{4}" // Простой формат
+        );
+        
+        // Поиск в тексте страницы
+        Matcher matcher = phonePattern.matcher(html);
+        while (matcher.find()) {
+            String phone = matcher.group().trim();
+            if (phone.length() >= 7) { // Минимальная длина телефона
+                phones.add(normalizePhone(phone));
+            }
+        }
+        
+        // Поиск в атрибутах href tel:
+        Elements telLinks = doc.select("a[href^=tel:]");
+        for (Element link : telLinks) {
+            String tel = link.attr("href").replace("tel:", "").trim();
+            if (!tel.isEmpty()) {
+                phones.add(normalizePhone(tel));
+            }
+        }
+        
+        // Поиск в тексте элементов с классами, содержащими "phone", "tel", "contact"
+        Elements phoneElements = doc.select("*[class*='phone'], *[class*='tel'], *[class*='contact'], *[id*='phone'], *[id*='tel']");
+        for (Element element : phoneElements) {
+            String text = element.text();
+            Matcher textMatcher = phonePattern.matcher(text);
+            while (textMatcher.find()) {
+                phones.add(normalizePhone(textMatcher.group().trim()));
+            }
+        }
+        
+        return new ArrayList<>(phones);
+    }
+    
+    /**
+     * Нормализует номер телефона
+     */
+    private String normalizePhone(String phone) {
+        return phone.replaceAll("[^\\d+]", "").replaceAll("^8", "+375");
+    }
+    
+    /**
+     * Извлекает email из HTML
+     */
+    private List<String> extractEmails(String html, Document doc) {
+        Set<String> emails = new LinkedHashSet<>();
+        
+        // Регулярное выражение для email
+        Pattern emailPattern = Pattern.compile(
+            "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        // Поиск в тексте страницы
+        Matcher matcher = emailPattern.matcher(html);
+        while (matcher.find()) {
+            String email = matcher.group().toLowerCase();
+            if (!email.contains("@example") && !email.contains("@test")) {
+                emails.add(email);
+            }
+        }
+        
+        // Поиск в атрибутах href mailto:
+        Elements mailLinks = doc.select("a[href^=mailto:]");
+        for (Element link : mailLinks) {
+            String email = link.attr("href").replace("mailto:", "").split("[?]")[0].trim().toLowerCase();
+            if (!email.isEmpty()) {
+                emails.add(email);
+            }
+        }
+        
+        // Поиск в элементах с классами, содержащими "email", "mail", "contact"
+        Elements emailElements = doc.select("*[class*='email'], *[class*='mail'], *[id*='email'], *[id*='mail']");
+        for (Element element : emailElements) {
+            String text = element.text();
+            Matcher textMatcher = emailPattern.matcher(text);
+            while (textMatcher.find()) {
+                emails.add(textMatcher.group().toLowerCase());
+            }
+        }
+        
+        return new ArrayList<>(emails);
+    }
+    
+    /**
+     * Извлекает адреса из HTML
+     */
+    private List<String> extractAddresses(Document doc) {
+        Set<String> addresses = new LinkedHashSet<>();
+        
+        // Поиск в структурированных данных (schema.org)
+        Elements addressElements = doc.select("*[itemtype*='PostalAddress'], *[itemprop='address'], address");
+        for (Element element : addressElements) {
+            String address = element.text().trim();
+            if (address.length() > 10) {
+                addresses.add(address);
+            }
+        }
+        
+        // Поиск в элементах с классами, содержащими "address", "адрес", "location"
+        Elements addressClassElements = doc.select(
+            "*[class*='address'], *[class*='адрес'], *[class*='location'], " +
+            "*[id*='address'], *[id*='адрес'], *[id*='location']"
+        );
+        for (Element element : addressClassElements) {
+            String address = element.text().trim();
+            if (address.length() > 10 && !address.contains("@")) { // Исключаем email
+                addresses.add(address);
+            }
+        }
+        
+        // Поиск в footer и contact sections
+        Elements footerElements = doc.select("footer, .footer, .contacts, .contact-info, .address-block");
+        for (Element element : footerElements) {
+            String text = element.text();
+            // Ищем паттерны адресов (улица, дом, город)
+            if (text.matches(".*(улица|ул\\.|street|st\\.|проспект|пр\\.|avenue|av\\.).*")) {
+                String[] lines = text.split("\n");
+                for (String line : lines) {
+                    line = line.trim();
+                    if (line.length() > 15 && line.matches(".*\\d+.*")) { // Содержит цифры
+                        addresses.add(line);
+                    }
+                }
+            }
+        }
+        
+        return new ArrayList<>(addresses);
+    }
+    
+    /**
+     * Извлекает время работы из HTML
+     */
+    private String extractWorkingHours(Document doc) {
+        // Поиск в структурированных данных (schema.org)
+        Elements openingHoursElements = doc.select("*[itemprop='openingHours'], *[itemprop='openingHoursSpecification']");
+        if (!openingHoursElements.isEmpty()) {
+            return openingHoursElements.first().text().trim();
+        }
+        
+        // Поиск в элементах с классами, содержащими "hours", "time", "расписание", "work"
+        Elements hoursElements = doc.select(
+            "*[class*='hours'], *[class*='time'], *[class*='расписание'], *[class*='work'], " +
+            "*[id*='hours'], *[id*='time'], *[id*='расписание']"
+        );
+        for (Element element : hoursElements) {
+            String text = element.text().trim();
+            if (text.toLowerCase().contains("пн") || text.toLowerCase().contains("mon") ||
+                text.toLowerCase().contains("вт") || text.toLowerCase().contains("tue") ||
+                text.matches(".*\\d{1,2}:\\d{2}.*")) {
+                return text;
+            }
+        }
+        
+        // Поиск в тексте, содержащем паттерны времени работы
+        String bodyText = doc.body().text();
+        Pattern hoursPattern = Pattern.compile(
+            "(?:пн|пон|mon|monday)[\\s:-]*\\d{1,2}:\\d{2}[\\s-]*\\d{1,2}:\\d{2}.*",
+            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
+        );
+        Matcher matcher = hoursPattern.matcher(bodyText);
+        if (matcher.find()) {
+            String match = matcher.group();
+            // Берем первые 200 символов
+            return match.length() > 200 ? match.substring(0, 200) + "..." : match;
+        }
+        
+        return null;
     }
 }

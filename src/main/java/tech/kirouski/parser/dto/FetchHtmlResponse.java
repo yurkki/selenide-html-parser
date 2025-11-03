@@ -1,17 +1,20 @@
 package tech.kirouski.parser.dto;
 
 public class FetchHtmlResponse {
-    private String results;
+    private ContactInfo results;
 
-    public FetchHtmlResponse(String results) {
+    public FetchHtmlResponse() {
+    }
+
+    public FetchHtmlResponse(ContactInfo results) {
         this.results = results;
     }
 
-    public String getResults() {
+    public ContactInfo getResults() {
         return results;
     }
 
-    public void setResults(String results) {
+    public void setResults(ContactInfo results) {
         this.results = results;
     }
 }
