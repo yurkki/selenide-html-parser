@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 public class HtmlParserService {
 
@@ -46,6 +49,16 @@ public class HtmlParserService {
         chromeOptions.addArguments("--lang=en-US,en");
         chromeOptions.addArguments("--accept-lang=en-US,en");
         
+        // Дополнительные предпочтения для обхода защиты
+        Map<String, Object> prefs = new HashMap<>();
+        prefs.put("profile.default_content_setting_values.notifications", 2);
+        prefs.put("profile.managed_default_content_settings.images", 1);
+        chromeOptions.setExperimentalOption("prefs", prefs);
+        
+        // Устанавливаем дополнительные заголовки через preferences
+        chromeOptions.setExperimentalOption("excludeSwitches", new String[]{"enable-automation", "enable-logging"});
+        chromeOptions.setExperimentalOption("useAutomationExtension", false);
+        
         // Устанавливаем путь к Chrome если указан в переменной окружения
         String chromeBin = System.getenv("CHROME_BIN");
         if (chromeBin != null && !chromeBin.isEmpty()) {
@@ -67,9 +80,11 @@ public class HtmlParserService {
                 logger.info("Предварительно открываем главную страницу: {}", baseUrl);
                 try {
                     Selenide.open(baseUrl);
-                    Thread.sleep(1500);
-                    // Удаляем webdriver флаг перед основной страницей
+                    Thread.sleep(2000);
+                    // Удаляем все признаки автоматизации после открытия первой страницы
+                    removeAutomationFlags();
                     removeWebDriverFlag();
+                    Thread.sleep(1000);
                 } catch (Exception e) {
                     logger.warn("Не удалось открыть главную страницу, продолжаем", e);
                 }
@@ -78,14 +93,27 @@ public class HtmlParserService {
             // Открываем целевую страницу
             Selenide.open(url);
             
-            // Ожидаем загрузки страницы и имитируем поведение пользователя
-            Thread.sleep(2000);
+            // Ожидаем загрузки страницы
+            Thread.sleep(3000);
             
-            // Удаляем флаги автоматизации из JavaScript (webdriver property)
+            // Удаляем все признаки автоматизации после открытия целевой страницы
+            removeAutomationFlags();
             removeWebDriverFlag();
             
+            // Имитируем поведение пользователя - прокрутка страницы
+            try {
+                var driver = WebDriverRunner.getWebDriver();
+                if (driver instanceof JavascriptExecutor) {
+                    ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, 100);");
+                    Thread.sleep(500);
+                    ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, 0);");
+                }
+            } catch (Exception e) {
+                logger.warn("Не удалось выполнить прокрутку", e);
+            }
+            
             // Дополнительная задержка для полной загрузки контента
-            Thread.sleep(1000);
+            Thread.sleep(2000);
             
             // Получаем HTML контент страницы
             String html = WebDriverRunner.getWebDriver().getPageSource();
@@ -131,12 +159,77 @@ public class HtmlParserService {
         try {
             var driver = WebDriverRunner.getWebDriver();
             if (driver instanceof JavascriptExecutor) {
-                ((JavascriptExecutor) driver).executeScript(
-                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-                );
+                String script = """
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                    window.chrome = {runtime: {}};
+                    Object.defineProperty(navigator, 'permissions', {get: () => ({query: () => Promise.resolve({state: 'granted'})})});
+                    """;
+                ((JavascriptExecutor) driver).executeScript(script);
             }
         } catch (Exception e) {
             logger.warn("Не удалось удалить webdriver флаг", e);
+        }
+    }
+    
+    /**
+     * Удаляет признаки автоматизации через JavaScript
+     */
+    private void removeAutomationFlags() {
+        try {
+            var driver = WebDriverRunner.getWebDriver();
+            if (driver instanceof JavascriptExecutor) {
+                // Удаляем все возможные признаки автоматизации
+                String script = """
+                    // Удаляем webdriver
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                    
+                    // Устанавливаем реалистичные plugins
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => {
+                            return [
+                                {name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer'},
+                                {name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai'},
+                                {name: 'Native Client', filename: 'internal-nacl-plugin'}
+                            ];
+                        }
+                    });
+                    
+                    // Устанавливаем languages
+                    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                    
+                    // Добавляем chrome объект
+                    window.chrome = {
+                        runtime: {},
+                        loadTimes: function() {},
+                        csi: function() {},
+                        app: {}
+                    };
+                    
+                    // Устанавливаем permissions
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ?
+                            Promise.resolve({ state: Notification.permission }) :
+                            originalQuery(parameters)
+                    );
+                    
+                    // Удаляем признаки автоматизации из document
+                    Object.defineProperty(document, '$cdc_asdjflasutopfhvcZLmcfl_', {get: () => undefined});
+                    Object.defineProperty(document, '$chrome_asyncScriptInfo', {get: () => undefined});
+                    
+                    // Устанавливаем реалистичные screen свойства
+                    Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+                    Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
+                    
+                    // Удаляем признаки headless
+                    Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 0});
+                    """;
+                ((JavascriptExecutor) driver).executeScript(script);
+            }
+        } catch (Exception e) {
+            logger.warn("Не удалось удалить признаки автоматизации", e);
         }
     }
 }
