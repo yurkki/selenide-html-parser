@@ -128,7 +128,10 @@ public class HtmlParserService {
             // Умное ожидание завершения динамической загрузки контента (макс 2 сек вместо фиксированных 2 сек)
             waitForDynamicContent(2000);
             
-            // Получаем HTML контент страницы
+            // Дополнительное ожидание для загрузки контактов и адресов (если они загружаются динамически)
+            waitForContactInfo(1500);
+            
+            // Получаем HTML контент страницы (с контактами и адресами внутри)
             String html = WebDriverRunner.getWebDriver().getPageSource();
             logger.info("HTML успешно получен, размер: {} символов", html.length());
             return html;
@@ -570,6 +573,66 @@ public class HtmlParserService {
             logger.debug("Динамический контент загружен");
         } catch (Exception e) {
             logger.debug("Таймаут ожидания динамического контента, продолжаем", e);
+        }
+    }
+    
+    /**
+     * Ожидание загрузки контактной информации на странице
+     */
+    private void waitForContactInfo(long maxWaitMs) {
+        try {
+            WebDriver driver = WebDriverRunner.getWebDriver();
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofMillis(maxWaitMs));
+            
+            // Ждем появления контактной информации (телефоны, адреса, email)
+            wait.until((ExpectedCondition<Boolean>) d -> {
+                if (!(d instanceof JavascriptExecutor)) {
+                    return true;
+                }
+                JavascriptExecutor js = (JavascriptExecutor) d;
+                try {
+                    // Проверяем наличие элементов с контактной информацией
+                    Long contactElements = (Long) js.executeScript(
+                        "return document.querySelectorAll(" +
+                        "'[class*=\"phone\"], [class*=\"tel\"], [class*=\"contact\"], " +
+                        "[class*=\"address\"], [class*=\"адрес\"], [class*=\"location\"], " +
+                        "[href^=\"tel:\"], [href^=\"mailto:\"], " +
+                        "[itemprop=\"telephone\"], [itemprop=\"address\"], [itemprop=\"email\"]" +
+                        ").length"
+                    );
+                    
+                    // Если есть хотя бы один элемент с контактами - считаем готово
+                    if (contactElements != null && contactElements > 0) {
+                        return true;
+                    }
+                    
+                    // Также проверяем наличие текста, похожего на телефон или адрес
+                    String pageText = (String) js.executeScript("return document.body.innerText || ''");
+                    if (pageText != null) {
+                        // Проверяем наличие паттернов телефонов (беларусь, россия, международные)
+                        boolean hasPhone = pageText.matches(".*(\\+?375|\\+?7|8)?\\s?[-()]?\\s?\\d{2,3}\\s?[-()]?\\s?\\d{3}[-()]?\\s?\\d{2}[-()]?\\s?\\d{2}.*") ||
+                                         pageText.matches(".*\\d{3}[-.\\s]?\\d{3}[-.\\s]?\\d{4}.*");
+                        
+                        // Проверяем наличие адресов (улица, дом, город)
+                        boolean hasAddress = pageText.toLowerCase().matches(".*(улица|ул\\.|street|st\\.|проспект|пр\\.|avenue|av\\.|адрес|address).*");
+                        
+                        // Проверяем наличие email
+                        boolean hasEmail = pageText.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*");
+                        
+                        if (hasPhone || hasAddress || hasEmail) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                } catch (Exception e) {
+                    return true; // При ошибке считаем готовым
+                }
+            });
+            
+            logger.debug("Контактная информация обнаружена на странице");
+        } catch (Exception e) {
+            logger.debug("Таймаут ожидания контактной информации, продолжаем (возможно, контакты не найдены на странице)", e);
         }
     }
 }

@@ -4,7 +4,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import tech.kirouski.parser.dto.ContactInfo;
 import tech.kirouski.parser.dto.FetchHtmlRequest;
 import tech.kirouski.parser.dto.FetchHtmlResponse;
 import tech.kirouski.parser.service.HtmlParserService;
@@ -35,14 +34,11 @@ public class HtmlParserController {
                 return ResponseEntity.badRequest().build();
             }
 
-            // Получаем HTML
+            // Получаем HTML (с контактами и адресами внутри)
             String html = htmlParserService.fetchHtml(url);
             
-            // Извлекаем контактную информацию
-            ContactInfo contactInfo = htmlParserService.extractContactInfo(html, url);
-            
-            // Возвращаем структурированные данные
-            return ResponseEntity.ok(new FetchHtmlResponse(contactInfo));
+            // Возвращаем HTML в results
+            return ResponseEntity.ok(new FetchHtmlResponse(html));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
