@@ -23,23 +23,23 @@ RUN apt-get update && \
     gnupg2 \
     ca-certificates \
     fonts-liberation \
-    libasound2 \
+    libasound2t64 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
+    libcups2t64 \
+    libdbus-1-3t64 \
+    libdrm2t64 \
+    libgbm1t64 \
+    libgtk-3-0t64 \
+    libnspr4t64 \
+    libnss3t64 \
+    libwayland-client0t64 \
+    libxcomposite1t64 \
+    libxdamage1t64 \
+    libxfixes3t64 \
+    libxkbcommon0t64 \
+    libxrandr2t64 \
     xdg-utils \
     && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
