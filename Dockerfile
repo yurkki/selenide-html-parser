@@ -16,31 +16,12 @@ RUN gradle build -x test --no-daemon
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# Устанавливаем зависимости и Google Chrome
+# Устанавливаем Google Chrome и его зависимости
 RUN apt-get update && \
     apt-get install -y \
     wget \
     gnupg \
     ca-certificates \
-    fonts-liberation \
-    libasound2t64 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2t64 \
-    libdbus-1-3t64 \
-    libdrm2t64 \
-    libgbm1t64 \
-    libgtk-3-0t64 \
-    libnspr4t64 \
-    libnss3t64 \
-    libwayland-client0t64 \
-    libxcomposite1t64 \
-    libxdamage1t64 \
-    libxfixes3t64 \
-    libxkbcommon0t64 \
-    libxrandr2t64 \
-    xdg-utils \
     && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
