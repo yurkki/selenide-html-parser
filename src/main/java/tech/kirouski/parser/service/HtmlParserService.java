@@ -8,12 +8,16 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedCondition;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tech.kirouski.parser.dto.ContactInfo;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -86,11 +90,13 @@ public class HtmlParserService {
                 logger.info("Предварительно открываем главную страницу: {}", baseUrl);
                 try {
                     Selenide.open(baseUrl);
-                    Thread.sleep(2000);
+                    // Умное ожидание готовности страницы (макс 3 сек вместо фиксированных 2 сек)
+                    waitForPageLoad(3000);
                     // Удаляем все признаки автоматизации после открытия первой страницы
                     removeAutomationFlags();
                     removeWebDriverFlag();
-                    Thread.sleep(1000);
+                    // Минимальная задержка для применения скриптов (0.3 сек вместо 1 сек)
+                    waitForScriptsExecution(300);
                 } catch (Exception e) {
                     logger.warn("Не удалось открыть главную страницу, продолжаем", e);
                 }
@@ -99,8 +105,8 @@ public class HtmlParserService {
             // Открываем целевую страницу
             Selenide.open(url);
             
-            // Ожидаем загрузки страницы
-            Thread.sleep(3000);
+            // Умное ожидание готовности страницы (макс 5 сек вместо фиксированных 3 сек)
+            waitForPageLoad(5000);
             
             // Удаляем все признаки автоматизации после открытия целевой страницы
             removeAutomationFlags();
@@ -111,15 +117,16 @@ public class HtmlParserService {
                 var driver = WebDriverRunner.getWebDriver();
                 if (driver instanceof JavascriptExecutor) {
                     ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, 100);");
-                    Thread.sleep(500);
+                    // Минимальная задержка для анимации прокрутки (0.2 сек вместо 0.5 сек)
+                    waitForScrollAnimation(200);
                     ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, 0);");
                 }
             } catch (Exception e) {
                 logger.warn("Не удалось выполнить прокрутку", e);
             }
             
-            // Дополнительная задержка для полной загрузки контента
-            Thread.sleep(2000);
+            // Умное ожидание завершения динамической загрузки контента (макс 2 сек вместо фиксированных 2 сек)
+            waitForDynamicContent(2000);
             
             // Получаем HTML контент страницы
             String html = WebDriverRunner.getWebDriver().getPageSource();
@@ -453,5 +460,116 @@ public class HtmlParserService {
         }
         
         return null;
+    }
+    
+    /**
+     * Умное ожидание готовности страницы (DOM готов + все запросы завершены)
+     */
+    private void waitForPageLoad(long maxWaitMs) {
+        try {
+            WebDriver driver = WebDriverRunner.getWebDriver();
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofMillis(maxWaitMs));
+            
+            // Ждем готовности DOM
+            wait.until((ExpectedCondition<Boolean>) d -> {
+                if (!(d instanceof JavascriptExecutor)) {
+                    return true;
+                }
+                JavascriptExecutor js = (JavascriptExecutor) d;
+                String readyState = (String) js.executeScript("return document.readyState");
+                return "complete".equals(readyState);
+            });
+            
+            // Ждем завершения всех AJAX запросов (если jQuery используется)
+            try {
+                wait.until((ExpectedCondition<Boolean>) d -> {
+                    if (!(d instanceof JavascriptExecutor)) {
+                        return true;
+                    }
+                    JavascriptExecutor js = (JavascriptExecutor) d;
+                    try {
+                        Long ajaxComplete = (Long) js.executeScript(
+                            "return (typeof jQuery !== 'undefined' && jQuery.active === 0) || " +
+                            "typeof jQuery === 'undefined'"
+                        );
+                        return ajaxComplete != null && ajaxComplete == 1;
+                    } catch (Exception e) {
+                        return true; // Если jQuery не используется, считаем что готово
+                    }
+                });
+            } catch (Exception e) {
+                // jQuery может отсутствовать, это нормально
+                logger.debug("jQuery не найден, пропускаем проверку AJAX");
+            }
+            
+            logger.debug("Страница загружена (макс. ожидание: {} мс)", maxWaitMs);
+        } catch (Exception e) {
+            logger.warn("Таймаут ожидания загрузки страницы, продолжаем", e);
+        }
+    }
+    
+    /**
+     * Ожидание выполнения JavaScript скриптов
+     */
+    private void waitForScriptsExecution(long maxWaitMs) {
+        try {
+            Thread.sleep(Math.min(maxWaitMs, 500)); // Максимум 500мс
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    /**
+     * Ожидание завершения анимации прокрутки
+     */
+    private void waitForScrollAnimation(long maxWaitMs) {
+        try {
+            Thread.sleep(Math.min(maxWaitMs, 300)); // Максимум 300мс
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    /**
+     * Умное ожидание загрузки динамического контента
+     */
+    private void waitForDynamicContent(long maxWaitMs) {
+        try {
+            WebDriver driver = WebDriverRunner.getWebDriver();
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofMillis(maxWaitMs));
+            
+            // Ждем стабилизации количества элементов на странице
+            final int[] previousElementCount = {0};
+            wait.until((ExpectedCondition<Boolean>) d -> {
+                if (!(d instanceof JavascriptExecutor)) {
+                    return true;
+                }
+                JavascriptExecutor js = (JavascriptExecutor) d;
+                try {
+                    Long currentCount = (Long) js.executeScript(
+                        "return document.getElementsByTagName('*').length"
+                    );
+                    
+                    if (currentCount == null) {
+                        return true;
+                    }
+                    
+                    // Если количество элементов стабильно 2 проверки подряд - считаем загруженным
+                    if (currentCount == previousElementCount[0]) {
+                        return true;
+                    }
+                    
+                    previousElementCount[0] = currentCount.intValue();
+                    Thread.sleep(100); // Небольшая пауза перед следующей проверкой
+                    return false;
+                } catch (Exception e) {
+                    return true; // При ошибке считаем готовым
+                }
+            });
+            
+            logger.debug("Динамический контент загружен");
+        } catch (Exception e) {
+            logger.debug("Таймаут ожидания динамического контента, продолжаем", e);
+        }
     }
 }
