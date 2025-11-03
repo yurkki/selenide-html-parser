@@ -3,6 +3,7 @@ package tech.kirouski.parser.service;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,13 +20,29 @@ public class HtmlParserService {
         Configuration.timeout = 10000;
         Configuration.browserSize = "1920x1080";
         
-        // Настройка для работы в Docker/Railway
+        // Настройка ChromeOptions для работы в Docker/Railway
+        ChromeOptions chromeOptions = new ChromeOptions();
+        // Обязательные опции для работы в Docker
+        chromeOptions.addArguments("--no-sandbox");
+        chromeOptions.addArguments("--disable-dev-shm-usage");
+        chromeOptions.addArguments("--disable-gpu");
+        chromeOptions.addArguments("--disable-software-rasterizer");
+        chromeOptions.addArguments("--disable-extensions");
+        chromeOptions.addArguments("--remote-allow-origins=*");
+        chromeOptions.addArguments("--window-size=1920,1080");
+        chromeOptions.addArguments("--disable-setuid-sandbox");
+        chromeOptions.addArguments("--disable-web-security");
+        chromeOptions.addArguments("--allow-running-insecure-content");
+        
+        // Устанавливаем путь к Chrome если указан в переменной окружения
         String chromeBin = System.getenv("CHROME_BIN");
         if (chromeBin != null && !chromeBin.isEmpty()) {
+            chromeOptions.setBinary(chromeBin);
             System.setProperty("webdriver.chrome.binary", chromeBin);
-            // Дополнительные опции для headless Chrome в Docker (через систему свойств)
-            System.setProperty("chromeoptions.args", "--no-sandbox;--disable-dev-shm-usage;--disable-gpu;--disable-software-rasterizer");
         }
+        
+        // Устанавливаем ChromeOptions через Configuration
+        Configuration.browserCapabilities = chromeOptions;
         
         try {
             logger.info("Открываем URL: {}", url);
