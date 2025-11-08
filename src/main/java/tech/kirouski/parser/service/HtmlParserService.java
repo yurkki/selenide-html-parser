@@ -152,7 +152,17 @@ public class HtmlParserService {
             throw e;
         } catch (Exception e) {
             logger.error("Ошибка при получении HTML с URL: {}", url, e);
-            throw new RuntimeException("Не удалось получить HTML с URL: " + url, e);
+            // Проверяем, не связана ли ошибка с невалидным URL
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && (errorMessage.contains("Invalid URL") || 
+                                         errorMessage.contains("Malformed URL") ||
+                                         errorMessage.contains("no protocol") ||
+                                         errorMessage.contains("unknown protocol") ||
+                                         errorMessage.contains("net::ERR_INVALID_URL") ||
+                                         errorMessage.contains("ERR_NAME_NOT_RESOLVED"))) {
+                throw new HtmlFetchException("Невалидный URL или невозможно подключиться к ресурсу: " + url);
+            }
+            throw new HtmlFetchException("Не удалось получить HTML с URL: " + url + ". " + e.getMessage());
         } finally {
             // Закрываем браузер после получения контента
             try {

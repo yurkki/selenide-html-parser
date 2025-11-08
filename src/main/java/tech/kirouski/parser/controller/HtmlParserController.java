@@ -55,6 +55,18 @@ public class HtmlParserController {
         } catch (HtmlFetchException e) {
             return ResponseEntity.badRequest()
                     .body(new FetchHtmlResponse(null, e.getMessage()));
+        } catch (RuntimeException e) {
+            // Обрабатываем RuntimeException, которые могут быть связаны с невалидным URL
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && (errorMessage.contains("Invalid URL") || 
+                                         errorMessage.contains("Malformed URL") ||
+                                         errorMessage.contains("невалидный URL") ||
+                                         errorMessage.contains("Невалидный URL"))) {
+                return ResponseEntity.badRequest()
+                        .body(new FetchHtmlResponse(null, "Невалидный URL: " + errorMessage));
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new FetchHtmlResponse(null, "Внутренняя ошибка сервера: " + e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new FetchHtmlResponse(null, "Внутренняя ошибка сервера: " + e.getMessage()));
@@ -69,8 +81,21 @@ public class HtmlParserController {
             throw new InvalidUrlException("URL не может быть пустым");
         }
         
+        String trimmedUrl = url.trim();
+        
+        // Проверяем, что URL содержит протокол и двоеточие
+        if (!trimmedUrl.contains("://")) {
+            throw new InvalidUrlException("URL должен содержать протокол (http:// или https://)");
+        }
+        
+        // Проверяем, что после протокола есть что-то еще
+        String[] parts = trimmedUrl.split("://", 2);
+        if (parts.length != 2 || parts[1] == null || parts[1].trim().isEmpty()) {
+            throw new InvalidUrlException("URL должен содержать хост после протокола");
+        }
+        
         try {
-            URL urlObj = new URL(url);
+            URL urlObj = new URL(trimmedUrl);
             // Проверяем протокол
             String protocol = urlObj.getProtocol();
             if (!protocol.equals("http") && !protocol.equals("https")) {
