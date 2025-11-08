@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tech.kirouski.parser.dto.ContactInfo;
+import tech.kirouski.parser.exception.HtmlFetchException;
 
 import java.time.Duration;
 import java.util.*;
@@ -27,7 +28,7 @@ public class HtmlParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(HtmlParserService.class);
 
-    public String fetchHtml(String url) {
+    public String fetchHtml(String url) throws HtmlFetchException {
         // Настройка Selenide для работы без видимого браузера
         Configuration.headless = true;
         Configuration.browser = "chrome";
@@ -134,7 +135,21 @@ public class HtmlParserService {
             // Получаем HTML контент страницы (с контактами и адресами внутри)
             String html = WebDriverRunner.getWebDriver().getPageSource();
             logger.info("HTML успешно получен, размер: {} символов", html.length());
+            
+            // Проверяем на наличие ошибки 403
+            if (is403Error(html)) {
+                throw new HtmlFetchException("Доступ к ресурсу запрещен (403 Forbidden)");
+            }
+            
+            // Проверяем размер HTML (должен быть не менее 500 символов)
+            if (html == null || html.length() < 500) {
+                throw new HtmlFetchException("Размер полученного HTML меньше 500 символов. Возможно, страница не загрузилась полностью или доступ к ресурсу ограничен");
+            }
+            
             return html;
+        } catch (HtmlFetchException e) {
+            logger.error("Ошибка при получении HTML с URL: {} - {}", url, e.getMessage());
+            throw e;
         } catch (Exception e) {
             logger.error("Ошибка при получении HTML с URL: {}", url, e);
             throw new RuntimeException("Не удалось получить HTML с URL: " + url, e);
@@ -634,5 +649,22 @@ public class HtmlParserService {
         } catch (Exception e) {
             logger.debug("Таймаут ожидания контактной информации, продолжаем (возможно, контакты не найдены на странице)", e);
         }
+    }
+    
+    /**
+     * Проверяет, является ли HTML ответом с ошибкой 403
+     */
+    private boolean is403Error(String html) {
+        if (html == null || html.isEmpty()) {
+            return false;
+        }
+        
+        String lowerHtml = html.toLowerCase();
+        // Проверяем наличие признаков ошибки 403
+        return lowerHtml.contains("403") && 
+               (lowerHtml.contains("forbidden") || 
+                lowerHtml.contains("доступ запрещен") || 
+                lowerHtml.contains("access denied") ||
+                lowerHtml.contains("доступ запрещён"));
     }
 }
