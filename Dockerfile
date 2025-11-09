@@ -35,7 +35,7 @@ ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 # Копируем только собранный JAR
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# Открываем порт (Railway автоматически определит PORT из переменной окружения)
+# Открываем порт
 EXPOSE 8080
 
 # Запускаем приложение
