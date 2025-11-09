@@ -95,7 +95,6 @@ public class HtmlParserService {
                     waitForPageLoad(3000);
                     // Удаляем все признаки автоматизации после открытия первой страницы
                     removeAutomationFlags();
-                    removeWebDriverFlag();
                     // Минимальная задержка для применения скриптов (0.3 сек вместо 1 сек)
                     waitForScriptsExecution(300);
                 } catch (Exception e) {
@@ -111,7 +110,6 @@ public class HtmlParserService {
             
             // Удаляем все признаки автоматизации после открытия целевой страницы
             removeAutomationFlags();
-            removeWebDriverFlag();
             
             // Имитируем поведение пользователя - прокрутка страницы
             try {
@@ -194,27 +192,6 @@ public class HtmlParserService {
     }
     
     /**
-     * Удаляет webdriver флаг из navigator для избежания детекции бота
-     */
-    private void removeWebDriverFlag() {
-        try {
-            var driver = WebDriverRunner.getWebDriver();
-            if (driver instanceof JavascriptExecutor) {
-                String script = """
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                    window.chrome = {runtime: {}};
-                    Object.defineProperty(navigator, 'permissions', {get: () => ({query: () => Promise.resolve({state: 'granted'})})});
-                    """;
-                ((JavascriptExecutor) driver).executeScript(script);
-            }
-        } catch (Exception e) {
-            logger.warn("Не удалось удалить webdriver флаг", e);
-        }
-    }
-    
-    /**
      * Удаляет признаки автоматизации через JavaScript
      */
     private void removeAutomationFlags() {
@@ -223,9 +200,6 @@ public class HtmlParserService {
             if (driver instanceof JavascriptExecutor) {
                 // Удаляем все возможные признаки автоматизации
                 String script = """
-                    // Удаляем webdriver
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                    
                     // Устанавливаем реалистичные plugins
                     Object.defineProperty(navigator, 'plugins', {
                         get: () => {
