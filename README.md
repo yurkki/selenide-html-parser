@@ -22,16 +22,6 @@ docker build -t selenide-html-parser .
 docker run -p 8080:8080 selenide-html-parser
 ```
 
-Приложение будет доступно по адресу `http://localhost:8080`
-
-### Переменные окружения
-
-При необходимости можно передать переменные окружения при запуске:
-
-```bash
-docker run -p 8080:8080 -e PORT=8080 selenide-html-parser
-```
-
 ## API
 
 ### POST /api/fetch-html
@@ -57,7 +47,3 @@ docker run -p 8080:8080 -e PORT=8080 selenide-html-parser
 - Java 17+
 - Chrome/Chromium браузер (для Selenide)
 - ChromeDriver (Selenide управляет автоматически)
-
-## CI/CD
-
-GitHub Actions автоматически запускает тесты при каждом push в main/master ветку.
