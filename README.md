@@ -50,7 +50,7 @@ docker run -p 8080:8080 -e PORT=8080 selenide-html-parser
 {
   "result": "<html>...</html>"
 }
-```\
+```
 
 ## Требования
 
